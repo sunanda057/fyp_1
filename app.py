@@ -243,20 +243,20 @@ if page == "📊 Overview & Data":
         st.markdown(f'<div class="kpi"><div class="kpi-label">Actual Stockout Rate</div><div class="kpi-value">{sr:.1f}%</div><div class="kpi-sub">Real stockout events in data</div></div>', unsafe_allow_html=True)
 
     st.markdown('<div class="sec"><h3>📂 Dataset Preview</h3><p>First 300 rows — Warehouse_Demand_Realistic_v2.xlsx</p></div>', unsafe_allow_html=True)
-    st.dataframe(raw_df.head(300), use_container_width=True, height=360)
+    st.dataframe(raw_df.head(300), width='stretch', height=360)
 
     col1, col2 = st.columns(2)
     with col1:
         st.markdown('<div class="sec"><h3>📍 Records by Zone</h3></div>', unsafe_allow_html=True)
         zc = raw_df['Warehouse_Zone'].value_counts().reset_index()
         zc.columns = ['Zone', 'Count']
-        st.dataframe(zc, use_container_width=True, hide_index=True)
+        st.dataframe(zc, width='stretch', hide_index=True)
     with col2:
         st.markdown('<div class="sec"><h3>📊 Key Statistics</h3></div>', unsafe_allow_html=True)
         st.dataframe(raw_df[['Gas_Consumption_kg','Monthly_Income (₹)',
                                'LPG_Price_per_Cylinder (₹)','Zone_Opening_Stock',
                                'No_of_Family_Members','Stockout_Occurred']].describe().round(2),
-                     use_container_width=True)
+                     width='stretch')
 
     buf = io.BytesIO()
     raw_df.to_excel(buf, index=False, engine='openpyxl')
@@ -309,7 +309,7 @@ elif page == "🤖 Train Models":
 
     def hi(row):
         return ['background-color:#1e3a5f;color:#5ba3d9;font-weight:bold' if row.name == 0 else '' for _ in row]
-    st.dataframe(rdf.style.apply(hi, axis=1), use_container_width=True, hide_index=True)
+    st.dataframe(rdf.style.apply(hi, axis=1), width='stretch', hide_index=True)
     st.success(f"🏆 Best Regression: **{best_reg_name}** · R²={rdf.iloc[0]['R² Score']}")
 
     # ── Classification table ──────────────────────────────────────────────────
@@ -324,7 +324,7 @@ elif page == "🤖 Train Models":
                           "F1 Score": round(f1_score(yte_s, p, zero_division=0), 4)})
     cdf = pd.DataFrame(clf_rows).sort_values("F1 Score", ascending=False).reset_index(drop=True)
     best_clf_name = cdf.iloc[0]["Model"]
-    st.dataframe(cdf.style.apply(hi, axis=1), use_container_width=True, hide_index=True)
+    st.dataframe(cdf.style.apply(hi, axis=1), width='stretch', hide_index=True)
     st.success(f"🏆 Best Classification: **{best_clf_name}** · F1={cdf.iloc[0]['F1 Score']}")
 
     st.session_state.update({
@@ -780,8 +780,8 @@ elif page == "📋 Batch Report":
             return 'background-color:#001a0d;color:#27ae60;font-weight:bold'
 
         st.markdown('<div class="sec"><h3>📊 Batch Results</h3></div>', unsafe_allow_html=True)
-        st.dataframe(res_df.style.applymap(cr, subset=['Risk_Level']),
-                     use_container_width=True, height=420)
+        st.dataframe(res_df.style.map(cr, subset=['Risk_Level']),
+                     width='stretch', height=420)
 
         ordered_cols = [MONTH_FULL[m-1] for m in sorted(month_sel)]
 
