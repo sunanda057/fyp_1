@@ -581,9 +581,9 @@ elif page == "🔮 Predict Demand":
         with col2:
             st.markdown("**👨‍👩‍👧 Household Profile**")
             subsidy  = st.selectbox("Subsidy Type", ['PMUY','Non-Subsidized'], key="p_sub")
-            members  = st.slider("Family Members", 1, 10, 4, key="p_mem")
-            adults   = st.slider("Adults", 1, 20, 2, key="p_adu")
-            children = st.slider("Children", 0, 20, 0, key="p_chi")
+            members  = st.number_input("Family Members", min_value=1, max_value=50, value=4, step=1, key="p_mem")
+            adults   = st.number_input("Adults", min_value=1, max_value=50, value=2, step=1, key="p_adu")
+            children = st.number_input("Children", min_value=0, max_value=50, value=0, step=1, key="p_chi")
 
             # ── Income field — plain number input, no arrow buttons ──
             income = st.number_input(
