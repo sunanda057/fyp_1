@@ -546,6 +546,52 @@ elif page == "🔮 Predict Demand":
     reg_feat = st.session_state["reg_feat"]
     clf_feat = st.session_state["clf_feat"]
 
+    # ── Model Accuracy Panel ──────────────────────────────────────────────────
+    rdf      = st.session_state["rdf"]
+    cdf      = st.session_state["cdf"]
+    br_name  = st.session_state["best_reg"]
+    bc_name  = st.session_state["best_clf"]
+    r2_val   = rdf.iloc[0]["R² Score"]
+    mae_val  = rdf.iloc[0]["MAE (kg)"]
+    rmse_val = rdf.iloc[0]["RMSE (kg)"]
+    f1_val   = cdf.iloc[0]["F1 Score"]
+    acc_val  = cdf.iloc[0]["Accuracy"]
+    prec_val = cdf.iloc[0]["Precision"]
+    rec_val  = cdf.iloc[0]["Recall"]
+
+    # R² as a percentage accuracy feel
+    r2_pct   = round(r2_val * 100, 2)
+    acc_pct  = round(acc_val * 100, 2)
+
+    st.markdown('<div class="sec"><h3>🎯 Model Accuracy (evaluated on 1,000 unseen test records)</h3><p>These scores show how well the models perform on data they were never trained on.</p></div>', unsafe_allow_html=True)
+
+    a1, a2, a3, a4, a5, a6 = st.columns(6)
+    with a1:
+        color = "#27ae60" if r2_pct >= 90 else "#f39c12" if r2_pct >= 75 else "#e74c3c"
+        st.markdown(f'<div class="kpi"><div class="kpi-label">R² Accuracy</div><div class="kpi-value" style="color:{color}">{r2_pct}%</div><div class="kpi-sub">Gas prediction fit</div></div>', unsafe_allow_html=True)
+    with a2:
+        st.markdown(f'<div class="kpi"><div class="kpi-label">Mean Abs Error</div><div class="kpi-value" style="color:#5ba3d9">{mae_val} kg</div><div class="kpi-sub">Avg prediction error</div></div>', unsafe_allow_html=True)
+    with a3:
+        st.markdown(f'<div class="kpi"><div class="kpi-label">RMSE</div><div class="kpi-value" style="color:#5ba3d9">{rmse_val} kg</div><div class="kpi-sub">Root mean sq error</div></div>', unsafe_allow_html=True)
+    with a4:
+        color2 = "#27ae60" if acc_pct >= 90 else "#f39c12" if acc_pct >= 75 else "#e74c3c"
+        st.markdown(f'<div class="kpi"><div class="kpi-label">Stockout Accuracy</div><div class="kpi-value" style="color:{color2}">{acc_pct}%</div><div class="kpi-sub">Correct classifications</div></div>', unsafe_allow_html=True)
+    with a5:
+        st.markdown(f'<div class="kpi"><div class="kpi-label">F1 Score</div><div class="kpi-value" style="color:#27ae60">{round(f1_val*100,1)}%</div><div class="kpi-sub">Precision + Recall balance</div></div>', unsafe_allow_html=True)
+    with a6:
+        st.markdown(f'<div class="kpi"><div class="kpi-label">Best Models</div><div class="kpi-value" style="font-size:.85rem;color:#c8dcf0">{br_name.split()[0]}</div><div class="kpi-sub">Reg · {bc_name.split()[0]} Clf</div></div>', unsafe_allow_html=True)
+
+    st.markdown(
+        f"<div style='background:#0a1628;border:1px solid #1a2e4a;border-radius:8px;"
+        f"padding:.55rem 1rem;font-size:.78rem;color:#5b7a99;margin-bottom:1rem'>"
+        f"ℹ️ <b style='color:#8aacc8'>What does this mean?</b> — "
+        f"An R² of <b style='color:#5ba3d9'>{r2_pct}%</b> means the model explains {r2_pct}% of the variance in gas consumption. "
+        f"The average prediction is off by only <b style='color:#5ba3d9'>{mae_val} kg</b> (~{round(mae_val/14.2*100)}% of one cylinder). "
+        f"Stockout classification is <b style='color:#5ba3d9'>{acc_pct}% accurate</b> with F1={round(f1_val*100,1)}% on the held-out test set."
+        f"</div>",
+        unsafe_allow_html=True
+    )
+
     # Calendar sync banner
     st.markdown(
         f'<div class="cal-info">🗓️ Calendar synced to today — '
@@ -597,20 +643,68 @@ elif page == "🔮 Predict Demand":
             )
             st.caption(f"💰 ₹{income:,} per month")
 
-        # Column 3 — Zone Operations
+        # Column 3 — Zone Operations (auto-filled from training data averages)
         with col3:
             st.markdown("**🏭 Zone Operations**")
-            lpg_price  = st.number_input("LPG Price/Cylinder (₹)", 700, 1200, 903, step=10, key="p_lpg")
-            open_stock = st.number_input("Zone Opening Stock", 100, 2000, 800, step=50, key="p_ops")
-            ordered    = st.number_input("Cylinders Ordered", 100, 1500, 435, step=25, key="p_ord")
-            lead_time  = st.slider("Lead Time (days)", 1, 15, 5, key="p_lt")
-            delivered  = st.number_input("Cylinders Delivered", 0, 1500, 410, step=25, key="p_del")
-            safety_s   = st.number_input("Zone Safety Stock", 40, 200, 75, step=5, key="p_saf")
-            reorder_p  = st.number_input("Zone Reorder Point", 60, 300, 125, step=5, key="p_rop")
-            closing_s  = st.number_input("Zone Closing Stock", 0, 2000, 780, step=50, key="p_cls")
-            units_short= st.number_input("Units Short", 0, 20, 0, step=1, key="p_ush",
-                                         help="0 = no shortage. >0 = demand exceeded supply.")
-            damaged    = st.number_input("Damaged Cylinders", 0, 50, 2, key="p_dmg")
+            st.caption("Auto-filled from historical zone averages. Expand below to override.")
+
+            # Compute zone averages from training data
+            tr_raw = st.session_state["tr_raw"]
+            zone_data = tr_raw[tr_raw['Warehouse_Zone'] == zone] if zone in tr_raw['Warehouse_Zone'].values else tr_raw
+
+            def zone_avg(col, fallback):
+                try:
+                    v = pd.to_numeric(zone_data[col], errors='coerce').mean()
+                    return fallback if pd.isna(v) else round(v)
+                except:
+                    return fallback
+
+            lpg_price_def  = zone_avg('LPG_Price_per_Cylinder (₹)', 903)
+            open_stock_def = zone_avg('Zone_Opening_Stock', 800)
+            ordered_def    = zone_avg('Zone_Cylinders_Ordered', 435)
+            lead_time_def  = zone_avg('Lead_Time_Days', 5)
+            delivered_def  = zone_avg('Zone_Cylinders_Delivered', 410)
+            safety_s_def   = zone_avg('Zone_Safety_Stock', 75)
+            reorder_p_def  = zone_avg('Zone_Reorder_Point', 125)
+            closing_s_def  = zone_avg('Zone_Closing_Stock', 780)
+            damaged_def    = zone_avg('Damaged_Cylinders', 2)
+
+            # Show auto-filled summary
+            st.markdown(
+                f"<div style='background:#0a1628;border:1px solid #1a2e4a;border-radius:8px;"
+                f"padding:.6rem .9rem;font-size:.78rem;color:#5ba3d9;line-height:1.8'>"
+                f"📦 Opening Stock: <b style='color:#c8dcf0'>{open_stock_def}</b><br>"
+                f"🚚 Ordered: <b style='color:#c8dcf0'>{ordered_def}</b> · Delivered: <b style='color:#c8dcf0'>{delivered_def}</b><br>"
+                f"⏱ Lead Time: <b style='color:#c8dcf0'>{lead_time_def} days</b><br>"
+                f"🔒 Safety Stock: <b style='color:#c8dcf0'>{safety_s_def}</b> · Reorder: <b style='color:#c8dcf0'>{reorder_p_def}</b><br>"
+                f"📉 Closing Stock: <b style='color:#c8dcf0'>{closing_s_def}</b> · Damaged: <b style='color:#c8dcf0'>{damaged_def}</b><br>"
+                f"💰 LPG Price: <b style='color:#c8dcf0'>₹{lpg_price_def}</b>"
+                f"</div>",
+                unsafe_allow_html=True
+            )
+
+            # Always render inputs inside expander so form can capture values
+            lpg_price   = lpg_price_def
+            open_stock  = open_stock_def
+            ordered     = ordered_def
+            lead_time   = lead_time_def
+            delivered   = delivered_def
+            safety_s    = safety_s_def
+            reorder_p   = reorder_p_def
+            closing_s   = closing_s_def
+            units_short = 0
+            damaged     = damaged_def
+            with st.expander("⚙️ Override zone values (optional)"):
+                lpg_price  = st.number_input("LPG Price/Cylinder (₹)", 700, 1200, int(lpg_price_def), step=10, key="p_lpg")
+                open_stock = st.number_input("Zone Opening Stock", 0, 5000, int(open_stock_def), step=50, key="p_ops")
+                ordered    = st.number_input("Cylinders Ordered", 0, 5000, int(ordered_def), step=25, key="p_ord")
+                lead_time  = st.number_input("Lead Time (days)", 1, 30, int(lead_time_def), step=1, key="p_lt")
+                delivered  = st.number_input("Cylinders Delivered", 0, 5000, int(delivered_def), step=25, key="p_del")
+                safety_s   = st.number_input("Zone Safety Stock", 0, 500, int(safety_s_def), step=5, key="p_saf")
+                reorder_p  = st.number_input("Zone Reorder Point", 0, 500, int(reorder_p_def), step=5, key="p_rop")
+                closing_s  = st.number_input("Zone Closing Stock", 0, 5000, int(closing_s_def), step=50, key="p_cls")
+                units_short= st.number_input("Units Short", 0, 100, 0, step=1, key="p_ush")
+                damaged    = st.number_input("Damaged Cylinders", 0, 100, int(damaged_def), key="p_dmg")
 
         st.divider()
         sc1, sc2, sc3, sc4 = st.columns(4)
