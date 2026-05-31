@@ -86,9 +86,16 @@ DROP_COLS = ['Record_ID','Family_ID','Month','Season','Festival']
 REG_EXCLUDE = ['Gas_Consumption_kg','Stockout_Occurred',
                'Actual_Demand (cylinders)','Fulfilled_Demand (cylinders)',
                'Avg_Daily_Demand','Units_Short']
-CLF_EXCLUDE = ['Stockout_Occurred','Gas_Consumption_kg',
-               'Actual_Demand (cylinders)','Fulfilled_Demand (cylinders)',
-               'Avg_Daily_Demand']
+CLF_EXCLUDE = ['Stockout_Occurred',              # target itself
+               'Gas_Consumption_kg',              # regression target
+               'Actual_Demand (cylinders)',        # only known after period ends
+               'Fulfilled_Demand (cylinders)',     # only known after period ends
+               'Avg_Daily_Demand',                 # derived from period outcome
+               'Units_Short',                      # direct consequence of stockout
+               'Zone_Closing_Stock',               # only known at end of period
+               'Zone_Cylinders_Delivered',         # only known after delivery
+               'Damaged_Cylinders',                # post-period outcome
+               ]
 
 ZONES       = ['Raghunathganj','Kandi','Samserganj','Berhampore','Bali',
                'Domkal','Farakka','Suti','Lalbagh','Jangipur']
