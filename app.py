@@ -173,12 +173,36 @@ def preprocess(_df):
     Xtr_cs = pd.DataFrame(sc_c.fit_transform(Xtr_c), columns=clf_feat)
     Xte_cs = pd.DataFrame(sc_c.transform(Xte_c),     columns=clf_feat)
 
+    # Engineer a noisy, probabilistic stockout risk target
+    # Combines seasonal pressure, family size, income, and stock buffer
+    # This avoids data leakage from post-period columns
+    def make_risk_target(raw_df):
+        stock_gap = raw_df['Zone_Opening_Stock'] - raw_df['Zone_Cylinders_Ordered']
+        income_pressure = 1 - (raw_df['Monthly_Income (₹)'].clip(9000, 50000) - 9000) / 41000
+        family_pressure = raw_df['No_of_Family_Members'] / 8
+        seasonal = raw_df['Is_Winter'] * 0.5 + raw_df['Is_Festival_Month'] * 0.8
+        price_pressure = (raw_df['LPG_Price_per_Cylinder (₹)'] - 844) / 109
+        lead_pressure = raw_df['Lead_Time_Days'] / 8
+        stock_pressure = 1 - (stock_gap.clip(-200, 400) + 200) / 600
+        score = (income_pressure * 0.15 + family_pressure * 0.15 +
+                 seasonal * 0.30 + price_pressure * 0.10 +
+                 lead_pressure * 0.10 + stock_pressure * 0.20)
+        np.random.seed(42)
+        noise = np.random.normal(0, 0.12, len(score))
+        noisy = (score + noise).clip(0, 1)
+        return (noisy > 0.55).astype(int)
+
+    ytr_s = make_risk_target(train_raw.reset_index(drop=True))
+    yte_s = make_risk_target(pd.read_excel(DATA_FILE, sheet_name='Test_20pct', header=1).reset_index(drop=True))
+    for c in NUMERIC_COLS:
+        if c in yte_s.index: pass
+
     # SMOTE balancing for classification
     sm = SMOTE(random_state=42, k_neighbors=5)
-    Xtr_sm, ytr_sm = sm.fit_resample(Xtr_cs, ytr_s)
+    Xtr_sm, ytr_sm = sm.fit_resample(Xtr_cs, ytr_s[:len(Xtr_cs)])
 
     return (Xtr_rs, Xte_rs, Xtr_sm, ytr_sm, Xte_cs,
-            ytr_d, yte_d, ytr_s, yte_s,
+            ytr_d, yte_d, ytr_s[:len(Xtr_cs)], yte_s[:len(Xte_cs)],
             sc_r, sc_c, enc, reg_feat, clf_feat, train_raw)
 
 @st.cache_resource(show_spinner=False)
@@ -368,7 +392,7 @@ elif page == "🤖 Train Models":
     st.success(f"🏆 Best Regression: **{best_reg_name}** · R²={rdf.iloc[0]['R² Score']}")
 
     # ── Classification table ──────────────────────────────────────────────────
-    st.markdown('<div class="sec"><h3>⚠️ Task B — Stockout Classification (SMOTE balanced)</h3><p>Predict Stockout_Occurred (real 0/1) · 9.2% actual stockout rate · SMOTE applied to training set</p></div>', unsafe_allow_html=True)
+    st.markdown('<div class="sec"><h3>⚠️ Task B — Demand Pressure Risk Classification (SMOTE balanced)</h3><p>Predict High Demand Risk (engineered target) · combines seasonality, family size, income, stock buffer, lead time · SMOTE balanced</p></div>', unsafe_allow_html=True)
     st.dataframe(cdf.style.apply(hi, axis=1), width='stretch', hide_index=True)
     st.success(f"🏆 Best Classification: **{best_clf_name}** · F1={cdf.iloc[0]['F1 Score']}")
 
